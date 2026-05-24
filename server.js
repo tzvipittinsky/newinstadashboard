@@ -1,8 +1,12 @@
-const express = require("express");
-const path = require("path");
+import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const IG_USER_ID = process.env.IG_USER_ID;
 const INSTAGRAM_ACCESS_TOKEN = process.env.INSTAGRAM_ACCESS_TOKEN;
@@ -21,11 +25,7 @@ app.get("/api/posts", async (req, res) => {
     const response = await fetch(url);
     const data = await response.json();
 
-    if (!response.ok) {
-      return res.status(response.status).json(data);
-    }
-
-    res.json(data);
+    res.status(response.status).json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

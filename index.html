@@ -1,273 +1,47 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Frisch Instagram Intelligence Dashboard</title>
-
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
   <style>
-    body{
-      margin:0;
-      background:#0d1020;
-      color:white;
-      font-family:Arial,sans-serif;
-    }
-
-    header{
-      padding:28px;
-      border-bottom:1px solid #2f3650;
-    }
-
-    h1{
-      margin:0 0 8px;
-      font-size:40px;
-    }
-
-    .sub{
-      color:#aab4d6;
-    }
-
-    .stats{
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-      gap:20px;
-      padding:28px;
-    }
-
-    .stat{
-      background:#171b2e;
-      border:1px solid #313855;
-      border-radius:18px;
-      padding:24px;
-    }
-
-    .stat h2{
-      margin:0;
-      font-size:42px;
-    }
-
-    .label{
-      color:#9ea9cc;
-      margin-top:8px;
-    }
-
-    .chart-wrap{
-      padding:28px;
-    }
-
-    .chart-card{
-      background:#171b2e;
-      border:1px solid #313855;
-      border-radius:18px;
-      padding:20px;
-    }
-
-    .grid{
-      display:grid;
-      grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
-      gap:24px;
-      padding:28px;
-    }
-
-    .card{
-      background:#171b2e;
-      border:1px solid #313855;
-      border-radius:18px;
-      overflow:hidden;
-    }
-
-    img,video{
-      width:100%;
-      height:340px;
-      object-fit:cover;
-      background:black;
-    }
-
-    .content{
-      padding:18px;
-    }
-
-    .pill{
-      display:inline-block;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid #434d72;
-      color:#b5c1e8;
-      font-size:12px;
-      margin-bottom:12px;
-    }
-
-    .caption{
-      line-height:1.5;
-      color:#e8edff;
-      margin-bottom:18px;
-      max-height:140px;
-      overflow:auto;
-      white-space:pre-wrap;
-    }
-
-    .metrics{
-      display:grid;
-      grid-template-columns:repeat(4,1fr);
-      gap:10px;
-    }
-
-    .metric{
-      background:#202743;
-      border-radius:12px;
-      padding:12px;
-      text-align:center;
-    }
-
-    .metric strong{
-      display:block;
-      font-size:20px;
-    }
-
-    .date{
-      color:#97a4c8;
-      margin-top:16px;
-      font-size:13px;
-    }
-
-    a{
-      color:#8db8ff;
-    }
+    :root{--bg:#0d1020;--panel:#171b2e;--panel2:#1d2339;--line:#303852;--text:#f4f6ff;--muted:#a9b5d6;--accent:#7c5cff;--good:#40d98a;--warn:#ffcf5a;--bad:#ff6b7a;}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at top left,#182141 0,#0d1020 35%,#090b16 100%);color:var(--text);font-family:Inter,Arial,sans-serif} a{color:#9dc2ff;text-decoration:none} 
+    header{position:sticky;top:0;z-index:5;background:rgba(13,16,32,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:22px 28px;display:flex;gap:18px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    h1{margin:0;font-size:34px;letter-spacing:-.03em}.sub{color:var(--muted);margin-top:6px}.controls{display:flex;gap:10px;flex-wrap:wrap}.controls button,.controls select{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:999px;padding:12px 15px;font-size:14px}.controls button.active{background:linear-gradient(135deg,#ff5ab9,#765cff);border-color:transparent}
+    main{padding:26px;max-width:1800px;margin:0 auto}.hero{display:grid;grid-template-columns:1.4fr .8fr;gap:18px;margin-bottom:18px}.panel{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015));border:1px solid var(--line);border-radius:24px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.25)}
+    .kpis{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:14px;margin-bottom:18px}.kpi{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:18px}.kpi strong{font-size:34px;display:block}.kpi span{color:var(--muted)}.delta.up{color:var(--good)}.delta.down{color:var(--bad)}
+    .insights{display:grid;gap:12px}.insight{padding:14px 16px;background:#11162a;border:1px solid var(--line);border-radius:16px;color:#dce4ff}.insight b{color:white}.section-title{display:flex;align-items:flex-end;justify-content:space-between;margin:28px 0 12px}h2{margin:0;font-size:24px}.hint{color:var(--muted);font-size:14px}
+    .charts{display:grid;grid-template-columns:1.5fr 1fr;gap:18px}.chartBox{height:360px}.chartBox canvas{max-height:315px}.tableWrap{overflow:auto}.table{width:100%;border-collapse:collapse}.table th,.table td{padding:14px;border-bottom:1px solid var(--line);vertical-align:top}.table th{text-align:left;color:var(--muted);font-size:13px}.captionCell{max-width:440px}.small{color:var(--muted);font-size:13px}.badge{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:5px 9px;color:#c3ccef;font-size:12px}
+    .posts{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px}.post{background:var(--panel);border:1px solid var(--line);border-radius:22px;overflow:hidden}.media{height:270px;background:#080a12}.media img,.media video{width:100%;height:100%;object-fit:cover}.postContent{padding:16px}.postTop{display:flex;justify-content:space-between;gap:10px;align-items:center}.caption{line-height:1.45;max-height:105px;overflow:auto;white-space:pre-wrap;margin:12px 0;color:#edf1ff}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.metric{background:var(--panel2);border-radius:12px;padding:10px;text-align:center}.metric strong{display:block;font-size:20px}.metric span{font-size:12px;color:var(--muted)}.score{font-size:22px;font-weight:800}.loading,.error{padding:60px;text-align:center;color:var(--muted)}
+    @media (max-width:1000px){.hero,.charts{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}h1{font-size:28px}} @media (max-width:600px){main{padding:14px}.kpis{grid-template-columns:1fr}.posts{grid-template-columns:1fr}}
   </style>
 </head>
-
 <body>
-
 <header>
-  <h1>Frisch Instagram Intelligence Dashboard</h1>
-  <div class="sub">
-    Live analytics and engagement tracking for the Frisch Instagram account
-  </div>
+  <div><h1>Frisch Instagram Intelligence Dashboard</h1><div class="sub">Live performance trends, post-level diagnostics, and content recommendations</div></div>
+  <div class="controls"><button data-days="7">7 days</button><button data-days="30" class="active">30 days</button><button data-days="90">90 days</button><select id="typeFilter"><option value="ALL">All post types</option></select><select id="sortBy"><option value="recent">Newest first</option><option value="engagement">Highest engagement</option><option value="likes">Most likes</option><option value="comments">Most comments</option><option value="rate">Best engagement rate</option></select></div>
 </header>
-
-<section class="stats" id="stats"></section>
-
-<section class="chart-wrap">
-  <div class="chart-card">
-    <canvas id="engagementChart"></canvas>
-  </div>
-</section>
-
-<section class="grid" id="posts"></section>
-
+<main id="app"><div class="loading">Loading live Instagram analytics...</div></main>
 <script>
-
-async function loadDashboard(){
-
-  const response = await fetch("/api/posts");
-  const json = await response.json();
-
-  const posts = json.data || [];
-
-  const totalLikes = posts.reduce((a,b)=>a+(b.like_count||0),0);
-  const totalComments = posts.reduce((a,b)=>a+(b.comments_count||0),0);
-  const totalEngagement = posts.reduce((a,b)=>a+(b.engagement||0),0);
-
-  document.getElementById("stats").innerHTML = `
-    <div class="stat">
-      <h2>${posts.length}</h2>
-      <div class="label">Posts</div>
-    </div>
-
-    <div class="stat">
-      <h2>${totalLikes}</h2>
-      <div class="label">Likes</div>
-    </div>
-
-    <div class="stat">
-      <h2>${totalComments}</h2>
-      <div class="label">Comments</div>
-    </div>
-
-    <div class="stat">
-      <h2>${totalEngagement}</h2>
-      <div class="label">Engagement</div>
-    </div>
-  `;
-
-  const ctx = document.getElementById("engagementChart");
-
-  new Chart(ctx,{
-    type:"bar",
-    data:{
-      labels:posts.slice(0,10).map((_,i)=>`Post ${i+1}`),
-      datasets:[{
-        label:"Engagement",
-        data:posts.slice(0,10).map(p=>p.engagement||0)
-      }]
-    }
-  });
-
-  document.getElementById("posts").innerHTML = posts.map(post=>`
-
-    <article class="card">
-
-      ${
-        post.media_type === "VIDEO"
-        ? `<video controls src="${post.media_url}"></video>`
-        : `<img src="${post.thumbnail_url || post.media_url}">`
-      }
-
-      <div class="content">
-
-        <div class="pill">${post.media_type}</div>
-
-        <div class="caption">
-          ${post.caption || "No caption"}
-        </div>
-
-        <div class="metrics">
-
-          <div class="metric">
-            <strong>${post.like_count || 0}</strong>
-            likes
-          </div>
-
-          <div class="metric">
-            <strong>${post.comments_count || 0}</strong>
-            comments
-          </div>
-
-          <div class="metric">
-            <strong>${post.saves || 0}</strong>
-            saves
-          </div>
-
-          <div class="metric">
-            <strong>${post.shares || 0}</strong>
-            shares
-          </div>
-
-        </div>
-
-        <div class="date">
-          ${new Date(post.timestamp).toLocaleString()}
-        </div>
-
-        <p>
-          <a href="${post.permalink}" target="_blank">
-            Open on Instagram →
-          </a>
-        </p>
-
-      </div>
-
-    </article>
-
-  `).join("");
-
-}
-
-loadDashboard();
-
+let raw=[], summary=null, currentDays=30, charts=[];
+const app=document.getElementById('app'), typeFilter=document.getElementById('typeFilter'), sortBy=document.getElementById('sortBy');
+const fmt=n=>Number(n||0).toLocaleString(); const pct=n=>n==null?'n/a':(n*100).toFixed(1)+'%';
+const esc=s=>String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const caption=p=>(p.caption||'No caption').replace(/\s+/g,' ').trim();
+const title=p=>caption(p).slice(0,72)+(caption(p).length>72?'...':'');
+const d=p=>new Date(p.timestamp); const day=p=>d(p).toLocaleDateString(undefined,{month:'short',day:'numeric'});
+const m=p=>p.metrics||{}; const interactions=p=>m(p).total_interactions||0; const rate=p=>m(p).engagement_rate||0;
+function destroyCharts(){charts.forEach(c=>c.destroy());charts=[]}
+function media(p){const src=p.thumbnail_url||p.media_url||'';return p.media_type==='VIDEO'?`<video controls poster="${esc(p.thumbnail_url||'')}" src="${esc(p.media_url||'')}"></video>`:`<img src="${esc(src)}" alt="">`}
+function filtered(){let arr=[...raw]; if(typeFilter.value!=='ALL') arr=arr.filter(p=>p.media_type===typeFilter.value); const s=sortBy.value; arr.sort((a,b)=> s==='engagement'?interactions(b)-interactions(a):s==='likes'?(m(b).likes||0)-(m(a).likes||0):s==='comments'?(m(b).comments||0)-(m(a).comments||0):s==='rate'?rate(b)-rate(a):d(b)-d(a)); return arr}
+function buildInsights(posts){const top=[...posts].sort((a,b)=>interactions(b)-interactions(a))[0]; const by=summary?.byType||[]; const best=[...by].sort((a,b)=>b.avg_interactions-a.avg_interactions)[0]; const trend=summary?.trend||{}; const direction=trend.trendPct==null?'flat':trend.trendPct>=0?'up':'down'; return [`${direction==='up'?'Engagement is up':'Engagement is down'} <b>${trend.trendPct==null?'n/a':Math.abs(trend.trendPct)+'%'}</b> vs. the first half of this window.`, best?`Best average format: <b>${best.type}</b> with <b>${fmt(best.avg_interactions)}</b> interactions per post.`:'Format comparison will appear after more posts load.', top?`Top post: <b>${esc(title(top))}</b> with <b>${fmt(interactions(top))}</b> interactions.`:'No top post yet.', `Tip: prioritize formats and topics that beat the average of <b>${fmt(Math.round((summary?.totals?.interactions||0)/(posts.length||1)))}</b> interactions per post.`]}
+function render(){const posts=filtered(); const totals=posts.reduce((a,p)=>{a.likes+=m(p).likes||0;a.comments+=m(p).comments||0;a.saved+=m(p).saved||0;a.shares+=m(p).shares||0;a.views+=m(p).views||0;a.reach+=m(p).reach||0;a.interactions+=interactions(p);return a},{likes:0,comments:0,saved:0,shares:0,views:0,reach:0,interactions:0}); const avg=Math.round(totals.interactions/(posts.length||1));
+app.innerHTML=`<section class="kpis"><div class="kpi"><strong>${fmt(posts.length)}</strong><span>Posts analyzed</span></div><div class="kpi"><strong>${fmt(totals.interactions)}</strong><span>Total interactions</span></div><div class="kpi"><strong>${fmt(avg)}</strong><span>Avg interactions/post</span></div><div class="kpi"><strong>${fmt(totals.likes)}</strong><span>Likes</span></div><div class="kpi"><strong>${fmt(totals.comments)}</strong><span>Comments</span></div></section><section class="hero"><div class="panel"><div class="section-title"><h2>Executive readout</h2><span class="hint">computed from live posts</span></div><div class="insights">${buildInsights(posts).map(x=>`<div class="insight">${x}</div>`).join('')}</div></div><div class="panel"><h2>Content mix</h2><canvas id="mixChart"></canvas></div></section><section class="charts"><div class="panel chartBox"><div class="section-title"><h2>Engagement trend by post</h2><span class="hint">real captions used as labels</span></div><canvas id="trendChart"></canvas></div><div class="panel chartBox"><div class="section-title"><h2>Avg engagement by format</h2><span class="hint">which type performs best</span></div><canvas id="formatChart"></canvas></div></section><div class="section-title"><h2>Top post diagnostics</h2><span class="hint">ranked by total interactions</span></div><section class="panel tableWrap"><table class="table"><thead><tr><th>Rank</th><th>Post</th><th>Type</th><th>Date</th><th>Likes</th><th>Comments</th><th>Saves</th><th>Shares</th><th>Reach</th><th>Total</th></tr></thead><tbody>${[...posts].sort((a,b)=>interactions(b)-interactions(a)).slice(0,12).map((p,i)=>`<tr><td>#${i+1}</td><td class="captionCell"><a href="${esc(p.permalink)}" target="_blank">${esc(title(p))}</a><div class="small">${esc(caption(p).slice(0,150))}</div></td><td><span class="badge">${esc(p.media_type)}</span></td><td>${day(p)}</td><td>${fmt(m(p).likes)}</td><td>${fmt(m(p).comments)}</td><td>${fmt(m(p).saved)}</td><td>${fmt(m(p).shares)}</td><td>${m(p).reach?fmt(m(p).reach):'n/a'}</td><td><b>${fmt(interactions(p))}</b></td></tr>`).join('')}</tbody></table></section><div class="section-title"><h2>Post-by-post cards</h2><span class="hint">open each post on Instagram for context</span></div><section class="posts">${posts.map(p=>`<article class="post"><div class="media">${media(p)}</div><div class="postContent"><div class="postTop"><span class="badge">${esc(p.media_type)}</span><span class="score">${fmt(interactions(p))}</span></div><div class="caption">${esc(caption(p))}</div><div class="metrics"><div class="metric"><strong>${fmt(m(p).likes)}</strong><span>likes</span></div><div class="metric"><strong>${fmt(m(p).comments)}</strong><span>comments</span></div><div class="metric"><strong>${fmt(m(p).saved)}</strong><span>saves</span></div><div class="metric"><strong>${fmt(m(p).shares)}</strong><span>shares</span></div></div><div class="small" style="margin-top:12px">${day(p)} ${m(p).reach?` · Reach ${fmt(m(p).reach)} · ER ${pct(rate(p))}`:''}</div><p><a href="${esc(p.permalink)}" target="_blank">Open on Instagram →</a></p></div></article>`).join('')}</section>`; chartsRender(posts)}
+function chartsRender(posts){destroyCharts(); const chronological=[...posts].sort((a,b)=>d(a)-d(b)); charts.push(new Chart(document.getElementById('trendChart'),{type:'line',data:{labels:chronological.map(p=>`${day(p)} — ${title(p).slice(0,35)}`),datasets:[{label:'Interactions',data:chronological.map(interactions),tension:.25},{label:'Likes',data:chronological.map(p=>m(p).likes||0),tension:.25},{label:'Comments',data:chronological.map(p=>m(p).comments||0),tension:.25}]},options:{responsive:true,maintainAspectRatio:false,plugins:{tooltip:{callbacks:{title:items=>items[0]?.label||''}}},scales:{x:{ticks:{maxRotation:45,minRotation:20}}}}})); const by=summary?.byType||[]; charts.push(new Chart(document.getElementById('formatChart'),{type:'bar',data:{labels:by.map(x=>x.type),datasets:[{label:'Avg interactions/post',data:by.map(x=>x.avg_interactions)},{label:'Avg likes/post',data:by.map(x=>x.avg_likes)}]},options:{responsive:true,maintainAspectRatio:false}})); charts.push(new Chart(document.getElementById('mixChart'),{type:'doughnut',data:{labels:by.map(x=>x.type),datasets:[{data:by.map(x=>x.posts)}]},options:{plugins:{legend:{position:'bottom'}}}}))}
+async function load(){try{app.innerHTML='<div class="loading">Loading live Instagram analytics...</div>'; const res=await fetch(`/api/dashboard?days=${currentDays}&limit=75`); const json=await res.json(); if(!res.ok) throw new Error(json?.error?.message||json?.error||'API error'); raw=json.posts||[]; summary=json.summary||{}; const types=[...new Set(raw.map(p=>p.media_type).filter(Boolean))]; typeFilter.innerHTML='<option value="ALL">All post types</option>'+types.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join(''); render()}catch(e){app.innerHTML=`<div class="error"><h2>Could not load dashboard</h2><p>${esc(e.message)}</p></div>`}}
+document.querySelectorAll('[data-days]').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('[data-days]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentDays=Number(btn.dataset.days);load()}); typeFilter.onchange=render; sortBy.onchange=render; load();
 </script>
-
 </body>
 </html>

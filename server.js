@@ -1,159 +1,47 @@
-import express from "express";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const app = express();
-const PORT = process.env.PORT || 8080;
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const IG_USER_ID = process.env.IG_USER_ID;
-const TOKEN = process.env.INSTAGRAM_ACCESS_TOKEN;
-const GRAPH = "https://graph.facebook.com/v25.0";
-
-app.use(express.static(__dirname));
-
-async function graphGet(pathname, params = {}) {
-  const url = new URL(`${GRAPH}${pathname}`);
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, value);
-  }
-  url.searchParams.set("access_token", TOKEN);
-  const response = await fetch(url);
-  const json = await response.json();
-  if (!response.ok) {
-    const message = json?.error?.message || `Graph API error ${response.status}`;
-    const err = new Error(message);
-    err.status = response.status;
-    err.payload = json;
-    throw err;
-  }
-  return json;
-}
-
-async function getMetric(mediaId, metric) {
-  try {
-    const json = await graphGet(`/${mediaId}/insights`, { metric });
-    const item = json?.data?.[0];
-    const raw = item?.values?.[0]?.value;
-    return typeof raw === "number" ? raw : Number(raw || 0);
-  } catch {
-    return null;
-  }
-}
-
-async function enrichPost(post) {
-  const insightNames = ["reach", "saved", "shares", "total_interactions", "views", "plays", "impressions"];
-  const insightEntries = await Promise.all(insightNames.map(async (name) => [name, await getMetric(post.id, name)]));
-  const insights = Object.fromEntries(insightEntries.filter(([, value]) => value !== null));
-
-  const likes = Number(post.like_count || 0);
-  const comments = Number(post.comments_count || 0);
-  const saved = Number(insights.saved || 0);
-  const shares = Number(insights.shares || 0);
-  const views = Number(insights.views || insights.plays || 0);
-  const reach = Number(insights.reach || 0);
-  const totalInteractions = Number(insights.total_interactions || likes + comments + saved + shares);
-  const engagementRate = reach > 0 ? totalInteractions / reach : null;
-
-  return {
-    ...post,
-    metrics: {
-      likes,
-      comments,
-      saved,
-      shares,
-      views,
-      reach,
-      impressions: Number(insights.impressions || 0),
-      total_interactions: totalInteractions,
-      engagement_rate: engagementRate
-    }
-  };
-}
-
-function summarize(posts) {
-  const totals = posts.reduce((acc, post) => {
-    const m = post.metrics || {};
-    acc.likes += m.likes || 0;
-    acc.comments += m.comments || 0;
-    acc.saved += m.saved || 0;
-    acc.shares += m.shares || 0;
-    acc.views += m.views || 0;
-    acc.reach += m.reach || 0;
-    acc.interactions += m.total_interactions || 0;
-    return acc;
-  }, { likes: 0, comments: 0, saved: 0, shares: 0, views: 0, reach: 0, interactions: 0 });
-
-  const byType = {};
-  for (const post of posts) {
-    const type = post.media_type || "POST";
-    if (!byType[type]) byType[type] = { type, posts: 0, interactions: 0, likes: 0, comments: 0, saved: 0, shares: 0, views: 0, reach: 0 };
-    const bucket = byType[type];
-    const m = post.metrics || {};
-    bucket.posts += 1;
-    bucket.interactions += m.total_interactions || 0;
-    bucket.likes += m.likes || 0;
-    bucket.comments += m.comments || 0;
-    bucket.saved += m.saved || 0;
-    bucket.shares += m.shares || 0;
-    bucket.views += m.views || 0;
-    bucket.reach += m.reach || 0;
-  }
-
-  for (const bucket of Object.values(byType)) {
-    bucket.avg_interactions = bucket.posts ? Math.round(bucket.interactions / bucket.posts) : 0;
-    bucket.avg_likes = bucket.posts ? Math.round(bucket.likes / bucket.posts) : 0;
-  }
-
-  const sorted = [...posts].sort((a, b) => (b.metrics?.total_interactions || 0) - (a.metrics?.total_interactions || 0));
-  const bestType = Object.values(byType).sort((a, b) => b.avg_interactions - a.avg_interactions)[0] || null;
-
-  const chronological = [...posts].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-  const midpoint = Math.floor(chronological.length / 2);
-  const early = chronological.slice(0, midpoint);
-  const late = chronological.slice(midpoint);
-  const avg = (arr) => arr.length ? Math.round(arr.reduce((s, p) => s + (p.metrics?.total_interactions || 0), 0) / arr.length) : 0;
-  const earlyAvg = avg(early);
-  const lateAvg = avg(late);
-  const trendPct = earlyAvg ? Math.round(((lateAvg - earlyAvg) / earlyAvg) * 100) : null;
-
-  return { totals, byType: Object.values(byType), topPosts: sorted.slice(0, 8), bestType, trend: { earlyAvg, lateAvg, trendPct } };
-}
-
-app.get("/api/dashboard", async (req, res) => {
-  try {
-    if (!IG_USER_ID || !TOKEN) return res.status(500).json({ error: "Missing IG_USER_ID or INSTAGRAM_ACCESS_TOKEN" });
-
-    const days = Math.max(1, Math.min(365, Number(req.query.days || 90)));
-    const limit = Math.max(5, Math.min(100, Number(req.query.limit || 50)));
-    const since = Date.now() - days * 24 * 60 * 60 * 1000;
-
-    const fields = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count";
-    const media = await graphGet(`/${IG_USER_ID}/media`, { fields, limit });
-
-    const rawPosts = (media.data || []).filter((p) => new Date(p.timestamp).getTime() >= since);
-    const posts = await Promise.all(rawPosts.map(enrichPost));
-
-    res.json({ generated_at: new Date().toISOString(), days, posts, summary: summarize(posts) });
-  } catch (err) {
-    res.status(err.status || 500).json(err.payload || { error: err.message });
-  }
-});
-
-app.get("/api/posts", async (req, res) => {
-  try {
-    if (!IG_USER_ID || !TOKEN) return res.status(500).json({ error: "Missing IG_USER_ID or INSTAGRAM_ACCESS_TOKEN" });
-    const fields = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count";
-    const media = await graphGet(`/${IG_USER_ID}/media`, { fields, limit: 25 });
-    const posts = await Promise.all((media.data || []).map(enrichPost));
-    res.json({ data: posts });
-  } catch (err) {
-    res.status(err.status || 500).json(err.payload || { error: err.message });
-  }
-});
-
-app.use((req, res) => res.sendFile(path.join(__dirname, "index.html")));
-
-app.listen(PORT, () => console.log(`Frisch analytics dashboard running on ${PORT}`));
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Frisch Instagram Intelligence Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{--bg:#080b18;--panel:#13182a;--panel2:#171d32;--line:#303953;--muted:#9eabcd;--text:#f4f7ff;--blue:#75a7ff;--green:#66e6aa;--pink:#ff5a99;--yellow:#ffd166;--red:#ff6b6b;--shadow:0 20px 55px rgba(0,0,0,.25)}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at top left,#17213c,#080b18 42%);color:var(--text);font-family:Inter,Arial,sans-serif} a{color:var(--blue);text-decoration:none}.wrap{max-width:1500px;margin:0 auto;padding:26px}.top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:24px}.title h1{font-size:42px;margin:0 0 8px}.sub{color:var(--muted);font-size:16px}.controls{display:flex;gap:12px;flex-wrap:wrap}select,button{background:#151b2e;border:1px solid var(--line);color:var(--text);border-radius:14px;padding:12px 14px;font-size:14px}button.active{background:linear-gradient(135deg,#ff5a99,#7f5cff);border:0}.fresh{margin-top:10px;color:var(--muted);font-size:13px;text-align:right}.grid{display:grid;gap:18px}.kpis{grid-template-columns:repeat(6,minmax(150px,1fr));margin:26px 0}.card,.panel{background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.02));border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow)}.kpi{padding:22px}.kpi .num{font-size:32px;font-weight:800}.kpi .label{color:var(--muted);margin-top:6px}.kpi .delta{font-size:12px;margin-top:12px;color:var(--green)}.kpi.warn .delta{color:var(--yellow)}.main{grid-template-columns:1.5fr .9fr;margin-bottom:18px}.panel{padding:22px}.panel h2{margin:0 0 14px;font-size:23px}.insights{display:grid;gap:12px}.insight{padding:14px;border-radius:16px;background:#10162a;border:1px solid #27314e;line-height:1.42}.insight strong{color:#fff}.charts{grid-template-columns:1fr 1fr;margin-bottom:18px}.chartBox{height:370px}.wide .chartBox{height:430px}.tableWrap{overflow:auto}.diag{width:100%;border-collapse:collapse;min-width:1100px}.diag th{text-align:left;color:#b9c7ee;padding:14px;border-bottom:1px solid var(--line);font-size:13px}.diag td{padding:16px 14px;border-bottom:1px solid #26304b;vertical-align:top}.rank{font-weight:800;font-size:22px}.postTitle{font-weight:700;color:#dce7ff;max-width:430px}.small{font-size:12px;color:var(--muted);line-height:1.35}.pill{display:inline-flex;align-items:center;border:1px solid #405075;border-radius:999px;padding:6px 10px;color:#c9d8ff;background:#10162a;font-size:12px}.score{height:9px;background:#27314e;border-radius:999px;overflow:hidden;min-width:110px}.score span{display:block;height:100%;background:linear-gradient(90deg,#ff5a99,#ffd166,#66e6aa)}.posts{grid-template-columns:repeat(auto-fill,minmax(340px,1fr));margin:22px 0}.post{overflow:hidden}.media{height:300px;background:#050711;position:relative}.media img,.media video{width:100%;height:100%;object-fit:cover}.badge{position:absolute;top:12px;left:12px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.25);padding:7px 10px;border-radius:999px;font-size:12px}.postBody{padding:16px}.caption{color:#d8e2ff;line-height:1.45;max-height:96px;overflow:auto}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:14px 0}.metric{background:#10162a;border-radius:12px;padding:10px;text-align:center}.metric b{display:block;font-size:18px}.metric span{color:var(--muted);font-size:12px}.postFooter{display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--muted);font-size:13px}.empty,.error{padding:30px;border:1px solid var(--line);border-radius:20px;background:#13182a}.error{border-color:#7f3140;color:#ffd7dd}@media(max-width:1050px){.top,.main{display:block}.controls{margin-top:20px}.kpis,.charts{grid-template-columns:1fr 1fr}.fresh{text-align:left}}@media(max-width:700px){.wrap{padding:16px}.title h1{font-size:31px}.kpis,.charts,.posts{grid-template-columns:1fr}.chartBox{height:300px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="top">
+      <div class="title"><h1>Frisch Instagram Intelligence Dashboard</h1><div class="sub">Professional-grade live performance analytics, momentum tracking, content diagnostics, and post-by-post recommendations.</div></div>
+      <div><div class="controls"><button id="days30" class="active">30 days</button><button id="days7">7 days</button><select id="typeFilter"><option value="ALL">All post types</option></select><select id="categoryFilter"><option value="ALL">All categories</option></select><select id="sortBy"><option value="total">Sort: total engagement</option><option value="velocity">Sort: momentum / hour</option><option value="commentRate">Sort: conversation rate</option><option value="timestamp">Sort: newest</option></select></div><div class="fresh" id="freshness">Loading...</div></div>
+    </section>
+    <section class="grid kpis" id="kpis"></section>
+    <section class="grid main"><div class="panel wide"><h2>Engagement trend over time</h2><div class="chartBox"><canvas id="trendChart"></canvas></div></div><div class="panel"><h2>Executive insights</h2><div class="insights" id="insights"></div></div></section>
+    <section class="grid charts"><div class="panel"><h2>Which post types perform best?</h2><div class="chartBox"><canvas id="typeChart"></canvas></div></div><div class="panel"><h2>Which content themes drive engagement?</h2><div class="chartBox"><canvas id="categoryChart"></canvas></div></div></section>
+    <section class="panel"><h2>Top post diagnostics</h2><div class="tableWrap"><table class="diag" id="diag"></table></div></section>
+    <section class="grid posts" id="posts"></section>
+  </div>
+<script>
+let allPosts=[], payload=null, days=30, charts=[];
+const fmt=new Intl.NumberFormat();
+function num(v){return fmt.format(Math.round(Number(v)||0))}
+function short(text,n=95){text=(text||'No caption').replace(/\s+/g,' ').trim();return text.length>n?text.slice(0,n)+'...':text}
+function pct(v){return `${Math.round((Number(v)||0)*100)}%`}
+function destroyCharts(){charts.forEach(c=>c.destroy());charts=[]}
+function filterPosts(){const type=document.getElementById('typeFilter').value, cat=document.getElementById('categoryFilter').value, sort=document.getElementById('sortBy').value; const cutoff=Date.now()-days*864e5; return allPosts.filter(p=>new Date(p.timestamp).getTime()>=cutoff).filter(p=>type==='ALL'||p.media_type===type).filter(p=>cat==='ALL'||p.category===cat).sort((a,b)=> sort==='timestamp'?new Date(b.timestamp)-new Date(a.timestamp):(Number(b[sort])||0)-(Number(a[sort])||0));}
+function renderKpis(posts){const t=posts.reduce((a,p)=>{a.likes+=p.likes||0;a.comments+=p.comments||0;a.saves+=p.saves||0;a.shares+=p.shares||0;a.reach+=p.reach||0;a.total+=p.total||0;a.velocity+=p.velocity||0;return a},{likes:0,comments:0,saves:0,shares:0,reach:0,total:0,velocity:0}); const avg=posts.length?Math.round(t.total/posts.length):0; document.getElementById('kpis').innerHTML=`<div class="card kpi"><div class="num">${num(posts.length)}</div><div class="label">Posts analyzed</div><div class="delta">Filtered window</div></div><div class="card kpi"><div class="num">${num(t.total)}</div><div class="label">Likes + comments</div><div class="delta">Verified live public engagement</div></div><div class="card kpi"><div class="num">${num(avg)}</div><div class="label">Avg. engagement/post</div><div class="delta">Benchmark for new posts</div></div><div class="card kpi"><div class="num">${num(t.reach)}</div><div class="label">Estimated / API reach</div><div class="delta">Uses Meta insight when available</div></div><div class="card kpi warn"><div class="num">${num(t.velocity)}</div><div class="label">Engagement per hour</div><div class="delta">Momentum signal</div></div><div class="card kpi"><div class="num">${num(t.comments)}</div><div class="label">Comments</div><div class="delta">Conversation depth</div></div>`}
+function chart(id,type,data,options={}){const c=new Chart(document.getElementById(id),{type,data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#dbe5ff'}},tooltip:{mode:'index',intersect:false}},scales:{x:{ticks:{color:'#9eabcd',maxRotation:45,minRotation:0},grid:{color:'rgba(255,255,255,.05)'}},y:{ticks:{color:'#9eabcd'},grid:{color:'rgba(255,255,255,.06)'}}},...options}});charts.push(c)}
+function renderCharts(posts){destroyCharts();const chrono=posts.slice().sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp)); chart('trendChart','line',{labels:chrono.map(p=>`${p.dateLabel} — ${short(p.title,34)}`),datasets:[{label:'Engagement',data:chrono.map(p=>p.total),tension:.35},{label:'5-post moving avg',data:movingAvg(chrono.map(p=>p.total),5),tension:.35},{label:'Momentum/hr',data:chrono.map(p=>Math.round(p.velocity)),tension:.35}]}); const byType=group(posts,'media_type'), byCat=group(posts,'category'); chart('typeChart','bar',{labels:byType.map(g=>g.name),datasets:[{label:'Avg engagement/post',data:byType.map(g=>g.avg)},{label:'Avg momentum/hr',data:byType.map(g=>Math.round(g.avgVelocity))}]}); chart('categoryChart','bar',{labels:byCat.map(g=>g.name),datasets:[{label:'Avg engagement/post',data:byCat.map(g=>g.avg)},{label:'Posts',data:byCat.map(g=>g.posts)}]},{indexAxis:'y'});}
+function movingAvg(values,w){return values.map((_,i)=>{const s=values.slice(Math.max(0,i-w+1),i+1);return Math.round(s.reduce((a,b)=>a+b,0)/s.length)})}
+function group(posts,key){const m=new Map();posts.forEach(p=>{const k=p[key]||'Unknown'; if(!m.has(k))m.set(k,{name:k,posts:0,total:0,velocity:0}); const g=m.get(k);g.posts++;g.total+=p.total||0;g.velocity+=p.velocity||0});return [...m.values()].map(g=>({...g,avg:Math.round(g.total/g.posts),avgVelocity:g.velocity/g.posts})).sort((a,b)=>b.avg-a.avg)}
+function renderInsights(posts){const top=posts[0], types=group(posts,'media_type'), cats=group(posts,'category'), recent=posts.filter(p=>Date.now()-new Date(p.timestamp).getTime()<7*864e5); const old=posts.filter(p=>Date.now()-new Date(p.timestamp).getTime()>=7*864e5); const recentAvg=recent.length?recent.reduce((a,p)=>a+p.total,0)/recent.length:0, oldAvg=old.length?old.reduce((a,p)=>a+p.total,0)/old.length:0; const trend=oldAvg?Math.round(((recentAvg-oldAvg)/oldAvg)*100):0; document.getElementById('insights').innerHTML=`<div class="insight"><strong>Best format:</strong> ${types[0]?.name||'N/A'} averages ${num(types[0]?.avg||0)} engagement per post.</div><div class="insight"><strong>Best theme:</strong> ${cats[0]?.name||'N/A'} is leading with ${num(cats[0]?.avg||0)} average engagement.</div><div class="insight"><strong>Momentum:</strong> Recent posts are ${trend>=0?'up':'down'} ${Math.abs(trend)}% vs older posts in this filter.</div><div class="insight"><strong>Top post:</strong> ${short(top?.title,90)} with ${num(top?.total||0)} likes/comments and ${num(top?.velocity||0)} engagement/hr.</div><div class="insight"><strong>Data note:</strong> Instagram app counts can run ahead of Graph API. Dashboard refreshes from API every 5 minutes server-side.</div>`}
+function renderTable(posts){document.getElementById('diag').innerHTML=`<thead><tr><th>Rank</th><th>Post</th><th>Type</th><th>Theme</th><th>Date</th><th>Likes</th><th>Comments</th><th>Momentum/hr</th><th>Conv.</th><th>Reach</th><th>Score</th></tr></thead><tbody>${posts.slice(0,18).map((p,i)=>`<tr><td class="rank">#${i+1}</td><td><div class="postTitle"><a href="${p.permalink}" target="_blank">${short(p.title,92)}</a></div><div class="small">${short(p.caption,140)}</div></td><td><span class="pill">${p.media_type}</span></td><td>${p.category}</td><td>${p.dateLabel}</td><td>${num(p.likes)}</td><td>${num(p.comments)}</td><td>${num(p.velocity)}</td><td>${pct(p.commentRate)}</td><td>${num(p.reach)}</td><td><div class="score"><span style="width:${p.performanceScore||0}%"></span></div><div class="small">${p.performanceScore||0}/100</div></td></tr>`).join('')}</tbody>`}
+function renderCards(posts){document.getElementById('posts').innerHTML=posts.slice(0,24).map(p=>`<article class="card post"><div class="media"><span class="badge">${p.media_type} • ${p.category}</span>${p.media_type==='VIDEO'?`<video controls poster="${p.thumbnail_url||''}" src="${p.media_url}"></video>`:`<img src="${p.thumbnail_url||p.media_url}" alt="">`}</div><div class="postBody"><div class="caption">${short(p.caption,210)}</div><div class="metrics"><div class="metric"><b>${num(p.likes)}</b><span>likes</span></div><div class="metric"><b>${num(p.comments)}</b><span>comments</span></div><div class="metric"><b>${num(p.velocity)}</b><span>/ hour</span></div><div class="metric"><b>${p.performanceScore||0}</b><span>score</span></div></div><div class="postFooter"><span>${p.dateLabel}</span><a href="${p.permalink}" target="_blank">Open →</a></div></div></article>`).join('')}
+function render(){const posts=filterPosts(); if(!posts.length){document.getElementById('posts').innerHTML='<div class="empty">No posts match these filters.</div>';return} renderKpis(posts); renderCharts(posts); renderInsights(posts); renderTable(posts); renderCards(posts);}
+function setupFilters(){['typeFilter','categoryFilter','sortBy'].forEach(id=>document.getElementById(id).addEventListener('change',render)); document.getElementById('days30').onclick=()=>{days=30;document.getElementById('days30').classList.add('active');document.getElementById('days7').classList.remove('active');render()}; document.getElementById('days7').onclick=()=>{days=7;document.getElementById('days7').classList.add('active');document.getElementById('days30').classList.remove('active');render()};}
+async function init(){try{const r=await fetch('/api/posts');payload=await r.json(); if(!r.ok)throw new Error(payload?.error?.message||payload?.error||'API error'); allPosts=payload.posts||payload.data||[]; const types=[...new Set(allPosts.map(p=>p.media_type).filter(Boolean))]; const cats=[...new Set(allPosts.map(p=>p.category).filter(Boolean))]; document.getElementById('typeFilter').innerHTML='<option value="ALL">All post types</option>'+types.map(t=>`<option>${t}</option>`).join(''); document.getElementById('categoryFilter').innerHTML='<option value="ALL">All categories</option>'+cats.map(c=>`<option>${c}</option>`).join(''); document.getElementById('freshness').textContent=`Updated ${new Date(payload.generatedAt).toLocaleString()} • ${payload.dataFreshness||''}`; setupFilters(); render();}catch(e){document.body.innerHTML=`<div class="wrap"><div class="error"><h2>Could not load dashboard</h2><p>${e.message}</p></div></div>`}}
+init();
+</script>
+</body>
+</html>

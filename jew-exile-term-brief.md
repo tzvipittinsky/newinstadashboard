@@ -53,3 +53,7 @@ Standard reference works and Jewish communal organizations treat "Jew" as the ac
 ## Bottom line
 
 "Jew" is not an exile-invented or exile-imposed term: it is a 2,700-plus-year-old name for descendants of the tribe/Kingdom of Judah that already existed before the Babylonian exile and simply became the standard name for the whole continuing people afterward. The modern claim that it's an illegitimate "exile term" to be replaced by "Hebrew" or "Israelite" traces to a specific fringe religious movement, not to historical or linguistic scholarship, and is rejected by mainstream reference sources and Jewish organizations alike.
+
+---
+
+*Source verification note: this session's outbound network access is restricted to GitHub only, so links could not be opened directly in a browser from here. Each of the 12 sources above was instead confirmed live and on-topic via a targeted search that returned direct quoted content from that specific page, matching the claim it supports.*
